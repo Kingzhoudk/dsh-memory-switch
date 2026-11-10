@@ -12,15 +12,17 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 
-const REPO = process.env.DSH_CHECKOUT ?? '/home/dk/study/deepseek-harness'
+const REPO = process.env.DSH_CHECKOUT
 let React
 let renderToStaticMarkup
-try {
-  const repoRequire = createRequire(`${REPO}/packages/client/ui-goal/package.json`)
-  React = repoRequire('react')
-  renderToStaticMarkup = repoRequire('react-dom/server').renderToStaticMarkup
-} catch {
-  React = undefined
+if (REPO !== undefined) {
+  try {
+    const repoRequire = createRequire(`${REPO}/packages/client/ui-goal/package.json`)
+    React = repoRequire('react')
+    renderToStaticMarkup = repoRequire('react-dom/server').renderToStaticMarkup
+  } catch {
+    React = undefined
+  }
 }
 
 const skip = React === undefined ? 'react from the DSH checkout is unavailable' : false

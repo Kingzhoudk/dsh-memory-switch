@@ -41,11 +41,25 @@ so declare them with `denyToolNames` / `denyToolPrefixes`.
 ## Install
 
 A standard DSH profile bundle: host half `lib/index.js`, browser half
-`lib/client.js` (`dsh.client`).
+`lib/client.js` (`dsh.client`). Install it from GitHub:
+
+```sh
+dsh plugin add github:Kingzhoudk/dsh-memory-switch
+# or the explicit git spec
+dsh plugin add git+https://github.com/Kingzhoudk/dsh-memory-switch.git
+```
+
+The plugin manager records the dependency and enables the bundle; without HMR
+the runtime must restart before the Host half mounts. The browser half appears
+after the page reloads.
+
+For a local checkout, install the directory instead
+(`dsh plugin add link:/absolute/path/to/dsh-memory-switch`), or mount it by hand
+through the profile:
 
 ```json
 // ~/.dsh/profiles/web/package.json — dependencies
-"dsh-memory-switch": "link:/home/dk/workspace/dsh-memory-switch"
+"dsh-memory-switch": "link:/absolute/path/to/dsh-memory-switch"
 ```
 
 Mount it either as a bundle (append `"dsh-memory-switch"` to

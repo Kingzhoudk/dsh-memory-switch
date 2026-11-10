@@ -27,26 +27,36 @@
 
 ## 安装
 
-插件是标准的 DSH profile bundle（宿主半 `lib/index.js` + 浏览器半 `lib/client.js`）。开发环境里可以 link 安装：
+插件是标准的 DSH profile bundle（宿主半 `lib/index.js` + 浏览器半 `lib/client.js`）。从
+GitHub 安装：
 
-```bash
-# 1) profile 依赖里加入本包（link: 本地目录）
-#    ~/.dsh/profiles/web/package.json
-"dependencies": { "dsh-memory-switch": "link:/home/dk/workspace/dsh-memory-switch" }
-
-# 2) 让 profile 组合它（二选一）
-#    a. 当作 bundle：把 "dsh-memory-switch" 追加到 dsh.profile.bundles —— 需要重启生效
-#    b. 直接挂到 profile 的用户补丁层 ~/.dsh/profiles/web/cordis.patch.yml —— patchReload: live，立即生效
+```sh
+dsh plugin add github:Kingzhoudk/dsh-memory-switch
+# 等价的显式 git spec
+dsh plugin add git+https://github.com/Kingzhoudk/dsh-memory-switch.git
 ```
 
+插件管理器会写入 profile 依赖并启用这个 bundle；没有 HMR 时需要重启运行时才能挂载宿主半，
+浏览器半在页面刷新后出现。
+
+本地开发可以改成装目录（`dsh plugin add link:/本地路径/dsh-memory-switch`），或手工挂到 profile：
+
+```json
+// ~/.dsh/profiles/web/package.json — dependencies
+"dsh-memory-switch": "link:/本地路径/dsh-memory-switch"
+```
+
+二选一：当作 bundle（把 `"dsh-memory-switch"` 追加到 `dsh.profile.bundles`，重启生效），或直接
+挂到 profile 的用户补丁层（`patchReload: live`，立即生效）：
+
 ```yaml
-# b. cordis.patch.yml 追加
+# ~/.dsh/profiles/web/cordis.patch.yml
 - insert:
     - id: memory-switch
       name: dsh-memory-switch
 ```
 
-然后 `pnpm install`（profile 目录内）让 `node_modules/dsh-memory-switch` 指向本目录；浏览器半随下次页面加载/刷新出现。
+然后在 profile 目录里 `pnpm install`，让 `node_modules/dsh-memory-switch` 能解析到。
 
 ## 命令
 

@@ -44,5 +44,13 @@
         "@deepseek-ai/dsh-client-ui-conversation"
       ]
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Kingzhoudk/dsh-memory-switch.git"
+  },
+  "homepage": "https://github.com/Kingzhoudk/dsh-memory-switch#readme",
+  "bugs": {
+    "url": "https://github.com/Kingzhoudk/dsh-memory-switch/issues"
   }
 }
