@@ -148,3 +148,7 @@ does not expand a directory argument there, so pass the files.
   OFF, invalid-config fallback and reporting.
 - `tests/client.test.mjs` — bundle self-registration, slot contract, fail-closed
   rendering before the projection arrives, and both settled states.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

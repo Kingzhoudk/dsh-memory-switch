@@ -103,3 +103,7 @@ npm test          # 等价于 node --test tests/host.test.mjs tests/client.test.
 
 - `tests/host.test.mjs`：命令参数语法、投影折叠（成功/失败/无关命令）、工具守卫（含 MCP 资源工具与 `cache_search`）、各类跨会话消息过滤（引用 / 团队中继 / 子代理回注）、OpenViking 七个方法的包裹、子代理继承、待发队列清理（含连续两次关闭）、非法配置回落与告警。
 - `tests/client.test.mjs`：浏览器半 bundle 自注册、slot 注册契约、投影未就绪时的 fail-closed 渲染与两态渲染。
+
+## 许可证
+
+MIT，见 [LICENSE](LICENSE)。
