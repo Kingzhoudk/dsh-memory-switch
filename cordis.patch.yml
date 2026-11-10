@@ -1,0 +1,11 @@
+# dsh-memory-switch: per-conversation memory gate.
+#
+# Each piece in this bundle is optional:
+#   - memory-switch        host half: durable per-session state, /memory command,
+#                          tool gates, OpenViking recall/capture gate
+#   - memory-switch-client client half is loaded automatically: the Web client
+#                          module system picks up this package's `dsh.client`
+#                          declaration together with this Loader entry.
+- insert:
+    - id: memory-switch
+      name: dsh-memory-switch
