@@ -96,6 +96,9 @@ dsh plugin add git+https://github.com/Kingzhoudk/dsh-memory-switch.git
 npm test          # 等价于 node --test tests/host.test.mjs tests/client.test.mjs
 ```
 
+浏览器半的测试从 DSH 源码 checkout 里解析 React：设置
+`DSH_CHECKOUT=/path/to/deepseek-harness` 才会运行，否则这两条用例会被跳过。
+
 `node --test tests/` 在 Node 22 下不展开目录参数，会以 `Cannot find module .../tests` 失败——请按上面的写法传文件。
 
 - `tests/host.test.mjs`：命令参数语法、投影折叠（成功/失败/无关命令）、工具守卫（含 MCP 资源工具与 `cache_search`）、各类跨会话消息过滤（引用 / 团队中继 / 子代理回注）、OpenViking 七个方法的包裹、子代理继承、待发队列清理（含连续两次关闭）、非法配置回落与告警。

@@ -134,6 +134,10 @@ Then run `pnpm install` inside the profile directory so
 npm test          # same as node --test tests/host.test.mjs tests/client.test.mjs
 ```
 
+The browser-half tests resolve React from a DSH source checkout: export
+`DSH_CHECKOUT=/path/to/deepseek-harness` to run them; without it those cases are
+skipped.
+
 `node --test tests/` fails on Node 22 with `Cannot find module .../tests` — Node
 does not expand a directory argument there, so pass the files.
 
