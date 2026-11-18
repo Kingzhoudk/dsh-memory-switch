@@ -1,6 +1,6 @@
 {
   "name": "dsh-memory-switch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "记忆开关: a per-conversation switch that cuts every cross-conversation memory channel for that conversation (history search, cross-conversation references, long-term memory read/write)",
   "type": "module",
@@ -15,6 +15,8 @@
   "exports": {
     ".": "./lib/index.js",
     "./client": "./lib/client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
     "./package.json": "./package.json"
   },
   "files": [
@@ -23,7 +25,9 @@
     "lib/client.js",
     "cordis.patch.yml",
     "README.md",
-    "README.zh.md"
+    "README.zh.md",
+    "locale/*.json",
+    "icon.svg"
   ],
   "keywords": [
     "dsh",
@@ -53,5 +57,6 @@
   "homepage": "https://github.com/Kingzhoudk/dsh-memory-switch#readme",
   "bugs": {
     "url": "https://github.com/Kingzhoudk/dsh-memory-switch/issues"
-  }
+  },
+  "icon": "./icon.svg"
 }
