@@ -9,7 +9,13 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { apply, parseMemoryArgument, memoryProjection } from '../lib/index.js'
+import {
+  apply,
+  createMemoryProjection,
+  memoryProjection,
+  parseMemoryArgument,
+  resolveMemoryTarget,
+} from '../lib/index.js'
 
 /** Build one session whose projection folds events appended to `events`. */
 function makeSession(id, header = {}) {
@@ -54,7 +60,12 @@ function makeCtx(options = {}) {
       list.push(listener)
       handlers.set(name, list)
     },
-    get(name) { return name === 'openvikingMemory' ? openviking : undefined },
+    get(name) {
+      if (name === 'openvikingMemory') return openviking
+      if (name === 'sessions') return options.sessions
+      if (name === 'sessionQuery') return options.sessionQuery
+      return undefined
+    },
     sessionProjections: {
       async register(definition) {
         projectionDefinition = definition
@@ -86,6 +97,9 @@ function makeCtx(options = {}) {
       }
       if (names.includes('openvikingMemory') && openviking !== undefined) {
         callback({ openvikingMemory: openviking })
+      }
+      if (names.includes('sessionQuery') && options.sessionQuery !== undefined) {
+        callback({ sessionQuery: options.sessionQuery })
       }
     },
   }
@@ -450,6 +464,17 @@ test('turning the switch off twice drops writes queued in between', async () => 
   }
 })
 
+test('unknown config keys are reported instead of silently ignored', async () => {
+  const warns = []
+  const harness = makeCtx({ tools: [] })
+  harness.ctx.logger = () => ({ debug() {}, info() {}, warn(message, detail) { warns.push(`${message} ${String(detail ?? '')}`) }, error() {} })
+  await apply(harness.ctx, { blockSessionTool: false, hideFromSerch: true })
+  assert.ok(
+    warns.some(message => message.includes('ignored unknown config keys') && message.includes('blockSessionTool')),
+    'a misspelled key is named in a warning',
+  )
+})
+
 test('invalid config values fall back to defaults and are reported', async () => {
   const warns = []
   const harness = makeCtx({ tools: ['session_search'] })
@@ -471,4 +496,146 @@ test('invalid config values fall back to defaults and are reported', async () =>
     'deny',
     'the mistyped boolean keeps its secure default',
   )
+})
+
+
+test('toggle resolves inside the fold, so it survives replay', () => {
+  assert.equal(resolveMemoryTarget('toggle', true), false)
+  assert.equal(resolveMemoryTarget('toggle', false), true)
+  assert.equal(resolveMemoryTarget(' on ', false), true)
+  assert.equal(resolveMemoryTarget('maybe', true), undefined)
+
+  const session = makeSession('s15')
+  session.append('command/run', { name: 'memory', args: 'toggle', commandId: 'c1' })
+  assert.equal(session.fold().enabled, true, 'the run alone changes nothing')
+  session.append('command/done', { commandId: 'c1', kind: 'success' })
+  assert.equal(session.fold().enabled, false, 'a toggle folds to the opposite of the state it applied to')
+  session.append('command/run', { name: 'memory', args: 'toggle', commandId: 'c2' })
+  session.append('command/done', { commandId: 'c2', kind: 'success' })
+  assert.equal(session.fold().enabled, true, 'a second toggle lands back on')
+})
+
+test('Agent Teams mailbox deliveries count as other-conversation context', async () => {
+  const harness = makeCtx()
+  await apply(harness.ctx, {})
+  const session = makeSession('s16')
+  const agent = makeAgent(session, harness)
+  await harness.handlers.get('agent/created')[0]({ agent })
+  await harness.getCommand().handler({ agent, rawInput: 'off' })
+  session.append('command/run', { name: 'memory', args: 'off', commandId: 'c1' })
+  session.append('command/done', { commandId: 'c1', kind: 'success' })
+
+  const decision = await runPreStep(harness, agent, [
+    { source: { kind: 'user' } },
+    { source: { kind: 'team-message' } },
+  ])
+  assert.deepEqual(decision.messages.map(message => message.source.kind), ['user'], 'the team mailbox is a foreign-conversation channel')
+
+  const open = makeCtx()
+  await apply(open.ctx, { blockTeamMailbox: false })
+  const session2 = makeSession('s17')
+  const agent2 = makeAgent(session2, open)
+  await open.handlers.get('agent/created')[0]({ agent: agent2 })
+  await open.getCommand().handler({ agent: agent2, rawInput: 'off' })
+  session2.append('command/run', { name: 'memory', args: 'off', commandId: 'c1' })
+  session2.append('command/done', { commandId: 'c1', kind: 'success' })
+  const kept = await runPreStep(open, agent2, [{ source: { kind: 'team-message' } }])
+  assert.equal(kept.messages.length, 1, 'blockTeamMailbox: false keeps mail')
+})
+
+test('IM archives and external-agent bridges are memory channels while off', async () => {
+  const harness = makeCtx({ tools: ['dsh_im_group_history', 'dsh_im_group_file', 'codebuddy_ask', 'read_mcp_resource'] })
+  await apply(harness.ctx, {})
+  const session = makeSession('s18')
+  const agent = makeAgent(session, harness)
+  await harness.handlers.get('agent/created')[0]({ agent })
+  await harness.getCommand().handler({ agent, rawInput: 'off' })
+  session.append('command/run', { name: 'memory', args: 'off', commandId: 'c1' })
+  session.append('command/done', { commandId: 'c1', kind: 'success' })
+
+  assert.equal(runGuard(harness, agent, 'dsh_im_group_history').kind, 'deny', 'the group archive spans other conversations')
+  assert.equal(runGuard(harness, agent, 'dsh_im_group_file').kind, 'deny')
+  assert.equal(runGuard(harness, agent, 'codebuddy_ask').kind, 'deny', 'a second local agent can read session logs itself')
+
+  const open = makeCtx({ tools: ['dsh_im_group_history', 'codebuddy_ask'] })
+  await apply(open.ctx, { blockImHistory: false, blockExternalAgents: false })
+  const session2 = makeSession('s19')
+  const agent2 = makeAgent(session2, open)
+  await open.handlers.get('agent/created')[0]({ agent: agent2 })
+  await open.getCommand().handler({ agent: agent2, rawInput: 'off' })
+  session2.append('command/run', { name: 'memory', args: 'off', commandId: 'c1' })
+  session2.append('command/done', { commandId: 'c1', kind: 'success' })
+  assert.equal(runGuard(open, agent2, 'dsh_im_group_history').kind, 'allow')
+  assert.equal(runGuard(open, agent2, 'codebuddy_ask').kind, 'allow')
+})
+
+test('memoryMcpServers names the MCP memory channels to cut', async () => {
+  const harness = makeCtx({ tools: ['mcp__memory__search', 'mcp__notion__search', 'read_mcp_resource'] })
+  await apply(harness.ctx, { memoryMcpServers: ['memory'] })
+  const session = makeSession('s20')
+  const agent = makeAgent(session, harness)
+  await harness.handlers.get('agent/created')[0]({ agent })
+  await harness.getCommand().handler({ agent, rawInput: 'off' })
+  session.append('command/run', { name: 'memory', args: 'off', commandId: 'c1' })
+  session.append('command/done', { commandId: 'c1', kind: 'success' })
+
+  assert.equal(runGuard(harness, agent, 'mcp__memory__search').kind, 'deny')
+  assert.equal(runGuard(harness, agent, 'mcp__notion__search').kind, 'allow', 'a document server is not memory by default')
+  assert.equal(runGuard(harness, agent, 'read_mcp_resource', { server: 'memory' }).kind, 'deny')
+  assert.equal(runGuard(harness, agent, 'read_mcp_resource', { server: 'notion' }).kind, 'allow')
+})
+
+test('a memory-off conversation is hidden from cross-session search', async () => {
+  const liveOff = makeSession('live-off')
+  liveOff.append('command/run', { name: 'memory', args: 'off', commandId: 'c1' })
+  liveOff.append('command/done', { commandId: 'c1', kind: 'success' })
+  const liveOn = makeSession('live-on')
+
+  /** A fresh fake search service, so one mount cannot see another's wrapper. */
+  function makeQuery(observed) {
+    return {
+      async searchSessions() {
+        return {
+          items: [
+            { header: { id: 'live-off' } },
+            { header: { id: 'persisted-off' } },
+            { header: { id: 'live-on' } },
+          ],
+        }
+      },
+      async observeSession(id) {
+        observed.push(id)
+        return {
+          projections: { values: { memorySwitch: { enabled: id !== 'persisted-off' } } },
+          [Symbol.dispose]() {},
+        }
+      },
+    }
+  }
+
+  const sessions = { get: id => (id === 'live-off' ? liveOff : id === 'live-on' ? liveOn : undefined) }
+  const observed = []
+  const sessionQuery = makeQuery(observed)
+  const harness = makeCtx({ tools: [], sessions, sessionQuery })
+  await apply(harness.ctx, {})
+
+  const page = await sessionQuery.searchSessions({}, {})
+  assert.deepEqual(page.items.map(hit => hit.header.id), ['live-on'], 'off conversations are filtered from search results')
+  assert.ok(observed.includes('persisted-off'), 'a conversation that is not live is read from its durable projection')
+
+  const kept = makeCtx({ tools: [], sessions, sessionQuery: makeQuery([]) })
+  await apply(kept.ctx, { hideFromSearch: false })
+  const unfiltered = await kept.ctx.get('sessionQuery').searchSessions({}, {})
+  assert.equal(unfiltered.items.length, 3, 'hideFromSearch: false leaves search untouched')
+})
+
+test('defaultEnabled preselects the switch for a profile without a composer', () => {
+  assert.equal(createMemoryProjection().init().enabled, true)
+  assert.equal(createMemoryProjection({ defaultEnabled: false }).init().enabled, false)
+  const offSession = makeSession('s21')
+  const definition = createMemoryProjection({ defaultEnabled: false })
+  assert.equal(definition.init().enabled, false, 'a fresh conversation starts off')
+  offSession.append('command/run', { name: 'memory', args: 'on', commandId: 'c1' })
+  offSession.append('command/done', { commandId: 'c1', kind: 'success' })
+  assert.equal(offSession.fold().enabled, true, 'the explicit command still restores memory')
 })

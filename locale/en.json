@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Memory switch",
-    "description": "Adds a switch to the composer tool row's left group in every conversation. While it is off, that conversation stops exchanging information with other conversations: cross-conversation history search and trace tools are denied, cross-conversation references and team relay messages are filtered out, and OpenViking recall, capture and commits are gated while another conversation's memory stays out of the request. State is stored in the session log, so reload, resume and fork restore it; subagents inherit it. On by default."
+    "description": "Adds a switch to the composer tool row in every Web conversation plus a /memory on|off|toggle|status command usable in every environment (terminal, ACP/SDK, IM, headless presets). Turned off, that conversation stops exchanging information with other conversations: history search and trace tools are denied, cross-conversation references, team relay and team mailbox messages are filtered, IM group archives and external-agent bridges are denied, and the conversation disappears from cross-session search results; with OpenViking installed its recall, capture and commits are stopped too. State lives in the session log, so reload, resume and fork restore it; subagents inherit it. On by default."
   }
 }

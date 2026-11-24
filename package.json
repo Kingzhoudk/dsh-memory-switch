@@ -1,8 +1,8 @@
 {
   "name": "dsh-memory-switch",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "记忆开关: a per-conversation switch that cuts every cross-conversation memory channel for that conversation (history search, cross-conversation references, long-term memory read/write)",
+  "description": "记忆开关: a per-conversation switch that cuts every cross-conversation memory channel for that conversation (history search, cross-conversation references, team mailbox, IM archives, long-term memory read/write) and hides it from cross-session search; works from the composer or from the /memory command in any environment",
   "type": "module",
   "license": "MIT",
   "main": "lib/index.js",
@@ -10,7 +10,7 @@
     "dsh": ">=0.2.2-rc.1 <0.3.0"
   },
   "scripts": {
-    "test": "node --test tests/host.test.mjs tests/client.test.mjs"
+    "test": "node --test tests/host.test.mjs tests/client.test.mjs && node scripts/test.mjs"
   },
   "exports": {
     ".": "./lib/index.js",
@@ -27,7 +27,9 @@
     "README.md",
     "README.zh.md",
     "locale/*.json",
-    "icon.svg"
+    "icon.svg",
+    "scripts/test.mjs",
+    "tests/host-integration.mts"
   ],
   "keywords": [
     "dsh",

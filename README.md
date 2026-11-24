@@ -14,7 +14,8 @@ information with other conversations through any of the channels listed below.
   `memorySwitch` session projection, and the projection frame pushes the new
   state back. Reload, resume, and fork all restore the same position; a fork
   inherits its parent's state through the inherited event prefix.
-- Default: **on**, matching today's behaviour.
+- Default: **on**, matching today's behaviour, unless the profile sets
+  `defaultEnabled: false` (useful where no composer exists — see Environments).
 
 ## What OFF cuts
 
@@ -24,6 +25,10 @@ information with other conversations through any of the channels listed below.
 | `cache_search` (research page cache in `~/.cache/dsh-free-search/research.db`, shared across conversations) | same — it can return pages another conversation fetched |
 | Cross-conversation references (`@`-mentioned session snapshots) | filtered out of the prepared step (`source.kind = session-reference`) |
 | Team relay messages (Agent Teams `source.kind = agent-message`) | filtered by default; `blockTeamRelay: false` lets them through |
+| Agent Teams mailbox deliveries (`source.kind = team-message`, durable history written by another conversation) | filtered by default; `blockTeamMailbox: false` keeps them |
+| IM archives — `dsh_im_group_history`, `dsh_im_group_file` (the same group's earlier DSH conversations) | guard + hidden while off; `blockImHistory: false` keeps them |
+| External-agent bridges — `codebuddy_ask` (a second local agent with its own session access) | guard + hidden while off; `blockExternalAgents: false` keeps them |
+| Cross-session full-text search results **about this conversation** | `sessionQuery.searchSessions` pages are filtered by the same durable state, so an OFF conversation is not found by other conversations' `session_search` |
 | Subagent results re-injected into the parent (`source.kind = subagent-settled`) | **kept** by default (same lineage); `blockSubagentSettled: true` filters them |
 | Subagent conversations spawned by this one | inherit OFF, including after a restart (the parent's durable projection is consulted when the parent is not live) |
 | Model behaviour | a `memory-switch:policy` prompt section explains that memory is off and not to work around it |
@@ -34,9 +39,12 @@ Left on by default (configurable): ThoughtDAG `why_*` tools
 (`blockOpenVikingSkills: true`). Workspace `AGENTS.md` instructions and ordinary
 skills are not conversation memory and always stay available.
 
-Other MCP memory servers (for example `mcp__notion__*`) are not blocked by
-default: whether they count as conversation memory depends on what you wired up,
-so declare them with `denyToolNames` / `denyToolPrefixes`.
+MCP memory servers are declared by name: `memoryMcpServers` (default
+`['openviking']`) blocks both `mcp__<server>__*` tools and the resource tools
+whose `server` argument names it. Document servers such as `mcp__notion__*` stay
+allowed unless you list them, because whether they carry conversation memory
+depends on what you wired up; `denyToolNames` / `denyToolPrefixes` remain
+available for anything else.
 
 ## Install
 
@@ -76,6 +84,18 @@ patch layer (`patchReload: live`, effective immediately):
 Then run `pnpm install` inside the profile directory so
 `node_modules/dsh-memory-switch` resolves.
 
+## Environments without a composer
+
+The switch is a command first and a Web surface second. `/memory on|off|toggle|status`
+runs anywhere a command registry exists — the Web/Desktop composer, an IM relay
+chat, an ACP/SDK client, a terminal — so a conversation without the
+`conversation.input.left` slot can still be controlled.
+
+Where nobody can type a command first (`dsh headless` one-shot runs, scheduled
+prompts), set `defaultEnabled: false` on the row: every fresh conversation then
+starts OFF, and an explicit `/memory on` still restores it. Because the state is
+log-derived, a resumed conversation keeps whatever it chose last.
+
 ## Commands
 
 | Input | Behaviour |
@@ -98,6 +118,12 @@ Then run `pnpm install` inside the profile directory so
     blockSubagentSettled: false  # drop subagent result re-injection (subagent-settled)
     blockThoughtdag: false       # also deny why_* (off by default)
     blockOpenVikingSkills: false # also deny OpenViking skills
+    blockTeamMailbox: true       # drop Agent Teams mailbox deliveries (team-message)
+    blockImHistory: true         # deny dsh_im_group_history / dsh_im_group_file
+    blockExternalAgents: true    # deny external-agent bridges (codebuddy_ask)
+    hideFromSearch: true         # hide this conversation from cross-session search
+    defaultEnabled: true         # false starts every fresh conversation OFF
+    memoryMcpServers: [openviking] # MCP servers treated as memory channels
     denyToolNames: []
     denyToolPrefixes: []
 ```
@@ -105,11 +131,16 @@ Then run `pnpm install` inside the profile directory so
 ## Known limits
 
 - **Direction**: an OFF conversation is strongly prevented from reading other
-  conversations, but the reverse — other conversations' searches not finding
-  it — is not achievable in this plugin: the session-query SQLite index and the
-  ThoughtDAG index have no per-session exclusion seam (`dsh-thoughtdag` reads
-  `~/.dsh/sessions` directly). Symmetric isolation needs a change in those
-  packages.
+  conversations, and `hideFromSearch` removes it from cross-session full-text
+  search results. Two gaps remain: a tool that is given the conversation id
+  directly (`session_event_search`, `session_event_read`, `session_trace`) can
+  still open it, and ThoughtDAG reads `~/.dsh/sessions` itself so no plugin seam
+  filters it. Closing those needs a change in `tool-session-query` /
+  `dsh-thoughtdag`.
+- **Search filtering cost and TTL**: every hit is resolved against the durable
+  projection (cached for 10 s), so a page of results costs up to one prepared
+  session read per unseen conversation. A conversation turned back on elsewhere
+  can stay hidden for at most that TTL.
 - **Not a sandbox**: this plugin only closes model-visible channels. With
   `bash` / `read` available, the model can still read `~/.dsh/sessions/**.jsonl.zstd`
   or `~/.cache/dsh-free-search/research.db` directly. Preventing that needs a
@@ -131,8 +162,16 @@ Then run `pnpm install` inside the profile directory so
 ## Development
 
 ```bash
-npm test          # same as node --test tests/host.test.mjs tests/client.test.mjs
+npm test          # unit + browser suites, then the real-host integration script
 ```
+
+`npm test` runs `node --test tests/host.test.mjs tests/client.test.mjs` and then
+`node scripts/test.mjs`. The integration script mounts the plugin into a real
+Harness host (llm, sessions, projections, system prompt, tools, commands, agent
+loop) with a stub `sessionQuery`, so it covers what the fake-context unit suite
+cannot: the optional `sessionQuery` injection, the search-visibility filter
+(including restore on unload), and `/memory toggle` round-tripping through the
+real projection. It needs `DSH_CHECKOUT` and skips without it.
 
 The browser-half tests resolve React from a DSH source checkout: export
 `DSH_CHECKOUT=/path/to/deepseek-harness` to run them; without it those cases are
@@ -142,12 +181,15 @@ skipped.
 does not expand a directory argument there, so pass the files.
 
 - `tests/host.test.mjs` — argument grammar, projection folding (success / failure
-  / unrelated command), tool guard (including MCP resource tools and
-  `cache_search`), every cross-conversation message kind, OpenViking wrapping
-  (seven methods), subagent inheritance, pending-queue cleanup including a second
-  OFF, invalid-config fallback and reporting.
+  / unrelated command / `toggle` replay), tool guard (including MCP resource
+  tools, `cache_search`, IM archives, external-agent bridges and configured MCP
+  servers), every cross-conversation message kind including the Agent Teams
+  mailbox, search-result isolation and its TTL, OpenViking wrapping (seven
+  methods), subagent inheritance, pending-queue cleanup including a second OFF,
+  `defaultEnabled`, invalid-config fallback and reporting.
 - `tests/client.test.mjs` — bundle self-registration, slot contract, fail-closed
   rendering before the projection arrives, and both settled states.
+- `tests/host-integration.mts` — the real-host run described above.
 
 ## License
 
